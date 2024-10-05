@@ -31,11 +31,12 @@
     "kysely": "^0.27.3",
     "lowdb": "^7.0.1",
     "prisma": "^5.7.0",
+    "rxjs-for-await": "^1.0.0",
     "solid-icons": "^1.1.0",
     "solid-js": "^1.8.17",
     "unimport": "^3.7.1",
     "unocss-preset-theme": "^0.12.0",
-    "vinxi": "^0.3.11"
+    "vinxi": "^0.3.14"
   },
   "engines": {
     "node": ">=18"
