@@ -1,10 +1,9 @@
 import { from as rxFrom, mergeMap, Observable } from "rxjs";
 import { SerializedRef, WsMessage, WsMessageDown, WsMessageUp } from "./shared";
 import { getListener, onCleanup } from "solid-js";
-import { latestValueFrom } from "rxjs-for-await";
 
 const globalWsPromise = new Promise<SimpleWs>((resolve) => {
-  const ws = new WebSocket("ws://localhost:3000/_server");
+  const ws = new WebSocket("ws://localhost:3000/_ws");
   ws.onopen = () => resolve(ws);
 });
 
@@ -67,7 +66,7 @@ function wsSub<T>(message: WsMessageUp, wsPromise: Promise<SimpleWs>) {
 
 export type SocketRef<I = any, O = any> = (
   input?: I
-) => AsyncGenerator<O> | Promise<O>;
+) => Observable<O> | Promise<O>;
 
 export function createRef<I, O>(
   refPromise: Promise<SerializedRef>,
@@ -75,20 +74,18 @@ export function createRef<I, O>(
 ) {
   return (input: I) => {
     if (getListener()) {
-      return latestValueFrom(
-        rxFrom(refPromise).pipe(
-          mergeMap((ref) => {
-            // console.log(`exposeRef 2`, refPromise);
-            return wsSub<O>(
-              {
-                type: "subscribe",
-                ref,
-                input,
-              },
-              wsPromise
-            );
-          })
-        )
+      return rxFrom(refPromise).pipe(
+        mergeMap((ref) => {
+          // console.log(`exposeRef 2`, refPromise);
+          return wsSub<O>(
+            {
+              type: "subscribe",
+              ref,
+              input,
+            },
+            wsPromise
+          );
+        })
       );
     } else {
       return refPromise.then((ref) => {
@@ -119,6 +116,8 @@ export function createEndpoint(name: string, wsPromise = globalWsPromise) {
   onCleanup(() => {
     scopePromise.then(({ dispose }) => dispose());
   });
+
+  scopeValue.then((sv) => console.log({ sv }));
 
   return new Proxy<SocketRef | Record<string, SocketRef>>((() => {}) as any, {
     apply(_, __, [input]) {

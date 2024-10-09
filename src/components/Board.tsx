@@ -1,5 +1,13 @@
 import { Action, useSubmissions } from "@solidjs/router";
-import { For, batch, createEffect, createMemo, untrack } from "solid-js";
+import {
+  For,
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+} from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import {
   AddColumn,
@@ -19,6 +27,8 @@ import {
   editNote,
   moveNote,
 } from "./Note";
+import { createBoard } from "./board-data";
+import { Observable } from "rxjs";
 
 export enum DragTypes {
   Note = "application/note",
@@ -92,12 +102,31 @@ type Mutation =
       timestamp: number;
     };
 
-export function Board(props: { board: BoardData }) {
+
+export default function Board(props: { board: BoardData }) {
   const [boardStore, setBoardStore] = createStore({
     columns: props.board.columns,
     notes: props.board.notes,
     timestamp: 0,
   });
+
+  const serverBoard = createBoard();
+
+  const [_serverBoard, setServerBoard] = createSignal();
+  createEffect(() => {
+    const $ = serverBoard.boardState() as Observable<any>;
+    console.log(`subscribing to `, $);
+    const sub = $.subscribe((v) => {
+      console.log({ v });
+      setServerBoard(v);
+    });
+    onCleanup(() => sub.unsubscribe())
+  });
+
+  setTimeout(() => {
+    console.log(`timeout`);
+    serverBoard.setBoard(Date.now());
+  }, 7000);
 
   const createNoteSubmission = useSubmissions(createNote);
   const editNoteSubmission = useSubmissions(editNote);

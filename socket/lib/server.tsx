@@ -1,6 +1,7 @@
 import {
   observable,
   SerializedRef,
+  SerializedStream,
   WsMessage,
   WsMessageDown,
   WsMessageUp,
@@ -60,24 +61,36 @@ export class LiveSolidServer {
 
     const { payload, disposal } = createRoot((disposal) => {
       const payload = endpoint(input);
+
       return { payload, disposal };
     });
 
     this.closures.set(id, { payload, disposal });
 
     if (typeof payload === "function") {
-      const value = createSeriazliedRef({
-        name,
-        scope: id,
-      });
-      this.send({ value, id });
+      if (payload.stream) {
+        const value = createSeriazliedStream({
+          name,
+          scope: id,
+        });
+        this.send({ value, id });
+      } else {
+        const value = createSeriazliedRef({
+          name,
+          scope: id,
+        });
+        this.send({ value, id });
+      }
     } else {
       const value = Object.entries(payload).reduce((res, [name, value]) => {
         return {
           ...res,
           [name]:
             typeof value === "function"
-              ? createSeriazliedRef({ name, scope: id })
+              ? // @ts-expect-error
+                value.stream
+                ? createSeriazliedStream({ name, scope: id, value })
+                : createSeriazliedRef({ name, scope: id })
               : value,
         };
       }, {} as Record<string, any>);
@@ -109,7 +122,7 @@ export class LiveSolidServer {
   }
 
   subscribe<I, O>(id: string, ref: SerializedRef<I, O>, input: I) {
-    // console.log(`subscribe`, ref);
+    console.log(`subscribe`, ref);
 
     const closure = this.closures.get(ref.scope);
     if (!closure) throw new Error(`Callable ${ref.scope} not found`);
@@ -119,11 +132,13 @@ export class LiveSolidServer {
 
     const response$ = observable(() => func(input));
     const sub = response$.subscribe((value) => {
-      // console.log({ value, ...ref });
+      console.log({ value, ...ref });
       this.send({ id, value });
     });
     this.closures.set(id, { payload: sub, disposal: () => sub.unsubscribe() });
   }
+
+  stream<O>(stream: SerializedStream<O>) {}
 
   cleanup() {
     for (const [key, closure] of this.closures.entries()) {
@@ -138,6 +153,12 @@ function createSeriazliedRef(
   opts: Omit<SerializedRef, "__type">
 ): SerializedRef {
   return { ...opts, __type: "ref" };
+}
+
+function createSeriazliedStream(
+  opts: Omit<SerializedStream, "__type">
+): SerializedStream {
+  return { ...opts, __type: "stream" };
 }
 
 export function createSocketFn<I, O>(

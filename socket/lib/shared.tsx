@@ -6,12 +6,12 @@ import {
   getOwner,
   onCleanup,
   createSignal,
-} from "../../lib/signals";
+} from "solid-js/dist/solid";
 
 export function observable<T>(input: Accessor<T>) {
   return new Observable<T>((observer) => {
     const dispose = createRoot((disposer) => {
-      createEffect(input, (v) => observer.next(v));
+      createEffect(() => observer.next(input()));
       return disposer;
     });
 
@@ -60,4 +60,11 @@ export type SerializedRef<I = any, O = any> = {
   __type: "ref";
   name: string;
   scope: string;
+};
+
+export type SerializedStream<O = any> = {
+  __type: "stream";
+  name: string;
+  scope: string;
+  value: O;
 };

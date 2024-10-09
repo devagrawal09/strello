@@ -9,8 +9,8 @@ import {
   useAction,
   useSubmission,
 } from "@solidjs/router";
-import { Show } from "solid-js";
-import { Board, BoardData } from "~/components/Board";
+import { ErrorBoundary, Show } from "solid-js";
+import Board, { type BoardData } from "~/components/Board";
 import EditableText from "~/components/EditableText";
 import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
@@ -97,7 +97,11 @@ export default function Page(props: RouteSectionProps) {
           </h1>
 
           <div>
-            <Board board={board()} />
+            <ErrorBoundary
+              fallback={(err) => <div>Something went wrononng</div>}
+            >
+              <Board board={board()} />
+            </ErrorBoundary>
           </div>
         </main>
       )}

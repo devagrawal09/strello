@@ -3,8 +3,12 @@ import unocss from "unocss/vite";
 import { client, router } from "./socket";
 
 const app = defineConfig({
+  ssr: false,
   server: {
     preset: "netlify",
+    experimental: {
+      websocket: true,
+    },
   },
   vite: {
     plugins: [unocss(), client()],
