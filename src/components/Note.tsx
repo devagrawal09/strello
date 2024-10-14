@@ -8,7 +8,12 @@ import { getIndexBetween } from "~/lib/utils";
 import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
 import { fetchBoard } from "~/lib";
-import { createEvent, createSubject, halt } from "solid-events";
+import {
+  createEvent,
+  createPartition,
+  createSubject,
+  halt,
+} from "solid-events";
 import { useBoardActions } from "./actions";
 
 export const createNote = action(
@@ -186,16 +191,18 @@ export function Note(props: { note: Note; previous?: Note; next?: Note }) {
     emitEditNote([props.note.id, e.target.value, new Date().getTime()])
   );
 
+  const [onDragOverValidEl, onDragOverInvalidEl] = createPartition(
+    onDragOver,
+    (e) => !!e.dataTransfer?.types.includes(DragTypes.Note)
+  );
+
   const acceptDrop = createSubject<"top" | "bottom" | false>(
     false,
     onDragExit(() => false),
     onDragLeave(() => false),
     onDrop(() => false),
-    onDragOver((e) => {
-      if (!e.dataTransfer?.types.includes(DragTypes.Note)) {
-        return false;
-      }
-
+    onDragOverInvalidEl(() => false),
+    onDragOverValidEl((e) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const midpoint = (rect.top + rect.bottom) / 2;
       const isTop = e.clientY < midpoint;
