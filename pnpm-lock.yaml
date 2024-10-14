@@ -47,6 +47,9 @@ importers:
       prisma:
         specifier: ^5.7.0
         version: 5.18.0
+      solid-events:
+        specifier: ^0.0.4
+        version: 0.0.4
       solid-icons:
         specifier: ^1.1.0
         version: 1.1.0(solid-js@1.8.22)
@@ -944,6 +947,11 @@ packages:
 
   '@solidjs/router@0.14.5':
     resolution: {integrity: sha512-J8ZMntnkDvNCSO9n4HyhlQlGdxYa1mandQLt5LMd0YiWAXGlYzjj+bB+OVtzsH1woWfoEJlVnBnGkMpf2lY/ig==}
+    peerDependencies:
+      solid-js: ^1.8.6
+
+  '@solidjs/router@0.14.8':
+    resolution: {integrity: sha512-S+rD5Twp0820cM03wEIYtb7/4KN7Cfr3BP+qPIqb7IXO/SZ72tWqHEMQsmcjDbr4yVfpA+5Sq0Y+xcq09y1gQA==}
     peerDependencies:
       solid-js: ^1.8.6
 
@@ -2579,6 +2587,9 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
+  rxjs@7.8.1:
+    resolution: {integrity: sha512-AA3TVj+0A2iuIoQkWEK/tqFjBq2j+6PO6Y0zJcvzLAFhEFIO3HL0vls9hWLncZbAAbK0mar7oZ4V079I/qPMxg==}
+
   safe-buffer@5.1.2:
     resolution: {integrity: sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==}
 
@@ -2671,6 +2682,9 @@ packages:
   smob@1.5.0:
     resolution: {integrity: sha512-g6T+p7QO8npa+/hNx9ohv1E5pVCmWrVCUzUXJyLdMmftX6ER0oiWY/w9knEonLpnOp6b6FenKnMfR8gqwWdwig==}
 
+  solid-events@0.0.4:
+    resolution: {integrity: sha512-ZpHHOf0X0PnWyp3ECnIrB8+VMVrDPlnkbVel2GpLhceJh39LWk/aLyKbYeMoUEM7TzhkTc6rbBN40VO3A3M3lA==}
+
   solid-icons@1.1.0:
     resolution: {integrity: sha512-IesTfr/F1ElVwH2E1110s2RPXH4pujKfSs+koT8rwuTAdleO5s26lNSpqJV7D1+QHooJj18mcOiz2PIKs0ic+A==}
     peerDependencies:
@@ -2678,6 +2692,9 @@ packages:
 
   solid-js@1.8.22:
     resolution: {integrity: sha512-VBzN5j+9Y4rqIKEnK301aBk+S7fvFSTs9ljg+YEdFxjNjH0hkjXPiQRcws9tE5fUzMznSS6KToL5hwMfHDgpLA==}
+
+  solid-js@1.9.2:
+    resolution: {integrity: sha512-fe/K03nV+kMFJYhAOE8AIQHcGxB4rMIEoEyrulbtmf217NffbbwBqJnJI4ovt16e+kaIt0czE2WA7mP/pYN9yg==}
 
   solid-refresh@0.6.3:
     resolution: {integrity: sha512-F3aPsX6hVw9ttm5LYlth8Q15x6MlI/J3Dn+o3EQyRTtTxidepSTwAYdozt01/YA+7ObcciagGEyXIopGZzQtbA==}
@@ -3896,6 +3913,10 @@ snapshots:
   '@solidjs/router@0.14.5(solid-js@1.8.22)':
     dependencies:
       solid-js: 1.8.22
+
+  '@solidjs/router@0.14.8(solid-js@1.9.2)':
+    dependencies:
+      solid-js: 1.9.2
 
   '@solidjs/start@1.0.6(rollup@4.21.0)(solid-js@1.8.22)(vinxi@0.4.2(@libsql/client@0.6.2)(@types/node@20.16.1)(better-sqlite3@9.6.0)(ioredis@5.4.1)(terser@5.31.6))(vite@5.4.2(@types/node@20.16.1)(terser@5.31.6))':
     dependencies:
@@ -5758,6 +5779,10 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
+  rxjs@7.8.1:
+    dependencies:
+      tslib: 2.6.3
+
   safe-buffer@5.1.2: {}
 
   safe-buffer@5.2.1: {}
@@ -5849,11 +5874,23 @@ snapshots:
 
   smob@1.5.0: {}
 
+  solid-events@0.0.4:
+    dependencies:
+      '@solidjs/router': 0.14.8(solid-js@1.9.2)
+      rxjs: 7.8.1
+      solid-js: 1.9.2
+
   solid-icons@1.1.0(solid-js@1.8.22):
     dependencies:
       solid-js: 1.8.22
 
   solid-js@1.8.22:
+    dependencies:
+      csstype: 3.1.3
+      seroval: 1.1.1
+      seroval-plugins: 1.1.1(seroval@1.1.1)
+
+  solid-js@1.9.2:
     dependencies:
       csstype: 3.1.3
       seroval: 1.1.1
