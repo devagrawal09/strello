@@ -159,15 +159,19 @@ export function Note(props: { note: Note; previous?: Note; next?: Note }) {
     onDragEnd(() => false)
   );
 
-  onDrop((e) => {
-    if (!e.dataTransfer?.types.includes(DragTypes.Note)) return;
+  const onDropNote = onDrop((e) => {
+    if (!e.dataTransfer?.types.includes(DragTypes.Note)) halt();
 
     const noteId = e.dataTransfer?.getData(DragTypes.Note) as
       | NoteId
       | undefined;
 
-    if (!noteId || noteId === props.note.id) return;
+    if (!noteId || noteId === props.note.id) halt();
 
+    return noteId;
+  });
+
+  onDropNote((noteId) => {
     if (acceptDrop() === "top" && props.previous?.id !== noteId) {
       return emitMoveNote([
         noteId,
