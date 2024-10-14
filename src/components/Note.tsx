@@ -9,6 +9,7 @@ import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
 import { fetchBoard } from "~/lib";
 import { createEvent, createSubject, halt } from "solid-events";
+import { useBoardActions } from "./actions";
 
 export const createNote = action(
   async ({
@@ -125,9 +126,7 @@ type BlurTextArea = FocusEvent & {
 };
 
 export function Note(props: { note: Note; previous?: Note; next?: Note }) {
-  const updateAction = useAction(editNote);
-  const deleteAction = useAction(deleteNote);
-  const moveNoteAction = useAction(moveNote);
+  const { emitMoveNote, emitDeleteNote, emitEditNote } = useBoardActions();
 
   let input: HTMLTextAreaElement | undefined;
 
@@ -165,26 +164,26 @@ export function Note(props: { note: Note; previous?: Note; next?: Note }) {
     if (!noteId || noteId === props.note.id) return;
 
     if (acceptDrop() === "top" && props.previous?.id !== noteId) {
-      return moveNoteAction(
+      return emitMoveNote([
         noteId,
         props.note.column,
         getIndexBetween(props.previous?.order, props.note.order),
-        new Date().getTime()
-      );
+        new Date().getTime(),
+      ]);
     }
 
     if (acceptDrop() === "bottom" && props.next?.id !== noteId) {
-      return moveNoteAction(
+      return emitMoveNote([
         noteId,
         props.note.column,
         getIndexBetween(props.note.order, props.next?.order),
-        new Date().getTime()
-      );
+        new Date().getTime(),
+      ]);
     }
   });
 
   onBlur((e) =>
-    updateAction(props.note.id, e.target.value, new Date().getTime())
+    emitEditNote([props.note.id, e.target.value, new Date().getTime()])
   );
 
   const acceptDrop = createSubject<"top" | "bottom" | false>(
@@ -244,7 +243,7 @@ export function Note(props: { note: Note; previous?: Note; next?: Note }) {
       </textarea>
       <button
         class="btn btn-ghost btn-sm btn-circle"
-        onClick={() => deleteAction(props.note.id, new Date().getTime())}
+        onClick={() => emitDeleteNote([props.note.id, new Date().getTime()])}
       >
         <BsTrash />
       </button>
@@ -262,7 +261,7 @@ export function AddNote(props: {
   onAdd: () => void;
   board: BoardId;
 }) {
-  const addNote = useAction(createNote);
+  const { emitCreateNote } = useBoardActions();
 
   const [onSubmit, emitSubmit] = createEvent();
   const [onCancel, emitCancel] = createEvent();
@@ -285,14 +284,16 @@ export function AddNote(props: {
       inputRef?.reportValidity();
       return;
     }
-    addNote({
-      id: crypto.randomUUID() as NoteId,
-      board: props.board,
-      column: props.column,
-      body,
-      order: props.length + 1,
-      timestamp: new Date().getTime(),
-    });
+    emitCreateNote([
+      {
+        id: crypto.randomUUID() as NoteId,
+        board: props.board,
+        column: props.column,
+        body,
+        order: props.length + 1,
+        timestamp: new Date().getTime(),
+      },
+    ]);
     inputRef && (inputRef.value = "");
     props.onAdd();
   });

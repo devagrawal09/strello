@@ -16,6 +16,7 @@ import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
 import { fetchBoard } from "~/lib";
 import { createEvent, createSubject, halt } from "solid-events";
+import { useBoardActions } from "./actions";
 
 export const renameColumn = action(
   async (id: ColumnId, name: string, timestamp: number) => {
@@ -95,9 +96,8 @@ type BlurInput = FocusEvent & {
 export function Column(props: { column: Column; board: Board; notes: Note[] }) {
   let parent: HTMLDivElement | undefined;
 
-  const renameAction = useAction(renameColumn);
-  const deleteAction = useAction(deleteColumn);
-  const moveNoteAction = useAction(moveNote);
+  const { emitRenameColumn, emitDeleteColumn, emitMoveNote } =
+    useBoardActions();
 
   const [onDragStart, emitDragStart] = createEvent<DragEvent>();
   const [onDragOver, emitDragOver] = createEvent<
@@ -121,22 +121,22 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
         | undefined;
 
       if (noteId && !filteredNotes().find((n) => n.id === noteId)) {
-        moveNoteAction(
+        emitMoveNote([
           noteId,
           props.column.id,
           getIndexBetween(
             filteredNotes()[filteredNotes().length - 1]?.order,
             undefined
           ),
-          new Date().getTime()
-        );
+          new Date().getTime(),
+        ]);
       }
     }
   });
 
   onBlur((e) => {
     if (e.target.reportValidity()) {
-      renameAction(props.column.id, e.target.value, new Date().getTime());
+      emitRenameColumn([props.column.id, e.target.value, new Date().getTime()]);
     }
   });
 
@@ -189,7 +189,9 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
         />
         <button
           class="btn btn-ghost btn-sm btn-circle"
-          onClick={() => deleteAction(props.column.id, new Date().getTime())}
+          onClick={() =>
+            emitDeleteColumn([props.column.id, new Date().getTime()])
+          }
         >
           <BsTrash />
         </button>
@@ -221,7 +223,7 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
 }
 
 export function ColumnGap(props: { left?: Column; right?: Column }) {
-  const moveColumnAction = useAction(moveColumn);
+  const { emitMoveColumn } = useBoardActions();
 
   const [onDragOver, emitDragOver] = createEvent<
     DragEvent & {
@@ -243,7 +245,7 @@ export function ColumnGap(props: { left?: Column; right?: Column }) {
       if (columnId) {
         if (columnId === props.left?.id || columnId === props.right?.id) return;
         const newOrder = getIndexBetween(props.left?.order, props.right?.order);
-        moveColumnAction(columnId, newOrder, new Date().getTime());
+        emitMoveColumn([columnId, newOrder, new Date().getTime()]);
       }
     }
   });
@@ -281,7 +283,7 @@ export function ColumnGap(props: { left?: Column; right?: Column }) {
 export function AddColumn(props: { board: BoardId; onAdd: () => void }) {
   const [active, setActive] = createSignal(false);
 
-  const addColumn = useAction(createColumn);
+  const { emitCreateColumn } = useBoardActions();
 
   let inputRef: HTMLInputElement | undefined;
   let plusRef: HTMLButtonElement | undefined;
@@ -296,12 +298,12 @@ export function AddColumn(props: { board: BoardId; onAdd: () => void }) {
         <form
           onSubmit={(e) => (
             e.preventDefault(),
-            addColumn(
+            emitCreateColumn([
               crypto.randomUUID() as ColumnId,
               props.board,
               inputRef?.value ?? "Column",
-              new Date().getTime()
-            ),
+              new Date().getTime(),
+            ]),
             inputRef && (inputRef.value = ""),
             props.onAdd()
           )}
