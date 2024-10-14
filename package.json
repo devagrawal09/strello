@@ -31,6 +31,7 @@
     "kysely": "^0.27.3",
     "lowdb": "^7.0.1",
     "prisma": "^5.7.0",
+    "solid-events": "^0.0.4",
     "solid-icons": "^1.1.0",
     "solid-js": "^1.8.22",
     "unimport": "^3.7.1",

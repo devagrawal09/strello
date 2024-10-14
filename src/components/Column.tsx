@@ -15,6 +15,8 @@ import { AddNote, Note, NoteId, moveNote } from "./Note";
 import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
 import { fetchBoard } from "~/lib";
+import { createEvent, createSubject, halt } from "solid-events";
+import { useBoardActions } from "./actions";
 
 export const renameColumn = action(
   async (id: ColumnId, name: string, timestamp: number) => {
@@ -88,14 +90,65 @@ export type Column = {
   order: number;
 };
 
+type BlurInput = FocusEvent & {
+  target: HTMLInputElement;
+};
 export function Column(props: { column: Column; board: Board; notes: Note[] }) {
   let parent: HTMLDivElement | undefined;
 
-  const renameAction = useAction(renameColumn);
-  const deleteAction = useAction(deleteColumn);
-  const moveNoteAction = useAction(moveNote);
+  const { emitRenameColumn, emitDeleteColumn, emitMoveNote } =
+    useBoardActions();
 
-  const [acceptDrop, setAcceptDrop] = createSignal<boolean>(false);
+  const [onDragStart, emitDragStart] = createEvent<DragEvent>();
+  const [onDragOver, emitDragOver] = createEvent<
+    DragEvent & {
+      currentTarget: HTMLDivElement;
+    }
+  >();
+  const [onDragExit, emitDragExit] = createEvent<DragEvent>();
+  const [onDragLeave, emitDragLeave] = createEvent<DragEvent>();
+  const [onDrop, emitDrop] = createEvent<DragEvent>();
+  const [onBlur, emitBlur] = createEvent<BlurInput>();
+
+  onDragStart((e) =>
+    e.dataTransfer?.setData(DragTypes.Column, props.column.id)
+  );
+
+  onDrop((e) => {
+    if (e.dataTransfer?.types.includes(DragTypes.Note)) {
+      const noteId = e.dataTransfer?.getData(DragTypes.Note) as
+        | NoteId
+        | undefined;
+
+      if (noteId && !filteredNotes().find((n) => n.id === noteId)) {
+        emitMoveNote([
+          noteId,
+          props.column.id,
+          getIndexBetween(
+            filteredNotes()[filteredNotes().length - 1]?.order,
+            undefined
+          ),
+          new Date().getTime(),
+        ]);
+      }
+    }
+  });
+
+  onBlur((e) => {
+    if (e.target.reportValidity()) {
+      emitRenameColumn([props.column.id, e.target.value, new Date().getTime()]);
+    }
+  });
+
+  const acceptDrop = createSubject(
+    false,
+    onDragOver((e) =>
+      e.dataTransfer?.types.includes(DragTypes.Note) ? true : halt()
+    ),
+    onDragLeave(() => false),
+    onDragExit(() => false),
+    onDrop(() => false)
+  );
 
   const filteredNotes = createMemo(() =>
     props.notes
@@ -111,39 +164,12 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
         border:
           acceptDrop() === true ? "2px solid red" : "2px solid transparent",
       }}
-      onDragStart={(e) => {
-        e.dataTransfer?.setData(DragTypes.Column, props.column.id);
-      }}
+      onDragStart={emitDragStart}
       onDragEnter={(e) => e.preventDefault()}
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (e.dataTransfer?.types.includes(DragTypes.Note)) {
-          setAcceptDrop(true);
-          return;
-        }
-      }}
-      onDragLeave={(e) => setAcceptDrop(false)}
-      onDragExit={(e) => setAcceptDrop(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        if (e.dataTransfer?.types.includes(DragTypes.Note)) {
-          const noteId = e.dataTransfer?.getData(DragTypes.Note) as
-            | NoteId
-            | undefined;
-          if (noteId && !filteredNotes().find((n) => n.id === noteId)) {
-            moveNoteAction(
-              noteId,
-              props.column.id,
-              getIndexBetween(
-                filteredNotes()[filteredNotes().length - 1]?.order,
-                undefined
-              ),
-              new Date().getTime()
-            );
-          }
-        }
-        setAcceptDrop(false);
-      }}
+      onDragOver={(e) => (e.preventDefault(), emitDragOver(e))}
+      onDragLeave={emitDragLeave}
+      onDragExit={emitDragExit}
+      onDrop={(e) => (e.preventDefault(), emitDrop(e))}
     >
       <div class="card card-side flex items-center bg-slate-100 px-2 py-2 mb-2 space-x-1">
         <div>
@@ -153,15 +179,7 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
           class="input input-ghost text-2xl font-bold w-full"
           value={props.column.title}
           required
-          onBlur={(e) => {
-            if (e.target.reportValidity()) {
-              renameAction(
-                props.column.id,
-                e.target.value,
-                new Date().getTime()
-              );
-            }
-          }}
+          onBlur={emitBlur}
           onKeyDown={(e) => {
             if (e.keyCode === 13) {
               // @ts-expect-error maybe use currentTarget?
@@ -171,7 +189,9 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
         />
         <button
           class="btn btn-ghost btn-sm btn-circle"
-          onClick={() => deleteAction(props.column.id, new Date().getTime())}
+          onClick={() =>
+            emitDeleteColumn([props.column.id, new Date().getTime()])
+          }
         >
           <BsTrash />
         </button>
@@ -203,8 +223,45 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
 }
 
 export function ColumnGap(props: { left?: Column; right?: Column }) {
-  const [active, setActive] = createSignal(false);
-  const moveColumnAction = useAction(moveColumn);
+  const { emitMoveColumn } = useBoardActions();
+
+  const [onDragOver, emitDragOver] = createEvent<
+    DragEvent & {
+      currentTarget: HTMLDivElement;
+    }
+  >();
+  const [onDragExit, emitDragExit] = createEvent<DragEvent>();
+  const [onDragLeave, emitDragLeave] = createEvent<DragEvent>();
+  const [onDrop, emitDrop] = createEvent<DragEvent>();
+
+  onDrop((e) => {
+    if (
+      e.dataTransfer?.types.includes(DragTypes.Column) &&
+      e.dataTransfer?.types.length === 1
+    ) {
+      const columnId = e.dataTransfer?.getData(DragTypes.Column) as
+        | ColumnId
+        | undefined;
+      if (columnId) {
+        if (columnId === props.left?.id || columnId === props.right?.id) return;
+        const newOrder = getIndexBetween(props.left?.order, props.right?.order);
+        emitMoveColumn([columnId, newOrder, new Date().getTime()]);
+      }
+    }
+  });
+
+  const active = createSubject(
+    false,
+    onDragOver((e) =>
+      e.dataTransfer?.types.includes(DragTypes.Column) &&
+      e.dataTransfer?.types.length === 1
+        ? true
+        : halt()
+    ),
+    onDrop(() => false),
+    onDragLeave(() => false),
+    onDragExit(() => false)
+  );
   return (
     <div
       class="h-full rounded-lg transition min-w-5 w-10"
@@ -213,39 +270,12 @@ export function ColumnGap(props: { left?: Column; right?: Column }) {
         opacity: active() ? 0.2 : 0,
       }}
       onDragEnter={(e) => e.preventDefault()}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (
-          e.dataTransfer?.types.includes(DragTypes.Column) &&
-          e.dataTransfer?.types.length === 1
-        ) {
-          setActive(true);
-        }
-      }}
-      onDragLeave={(e) => setActive(false)}
-      onDragExit={(e) => setActive(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setActive(false);
-        if (
-          e.dataTransfer?.types.includes(DragTypes.Column) &&
-          e.dataTransfer?.types.length === 1
-        ) {
-          const columnId = e.dataTransfer?.getData(DragTypes.Column) as
-            | ColumnId
-            | undefined;
-          if (columnId) {
-            if (columnId === props.left?.id || columnId === props.right?.id)
-              return;
-            const newOrder = getIndexBetween(
-              props.left?.order,
-              props.right?.order
-            );
-            moveColumnAction(columnId, newOrder, new Date().getTime());
-          }
-        }
-      }}
+      onDragOver={(e) => (
+        e.preventDefault(), e.stopPropagation(), emitDragOver(e)
+      )}
+      onDragLeave={emitDragLeave}
+      onDragExit={emitDragExit}
+      onDrop={(e) => (e.preventDefault(), emitDrop(e))}
     />
   );
 }
@@ -253,7 +283,7 @@ export function ColumnGap(props: { left?: Column; right?: Column }) {
 export function AddColumn(props: { board: BoardId; onAdd: () => void }) {
   const [active, setActive] = createSignal(false);
 
-  const addColumn = useAction(createColumn);
+  const { emitCreateColumn } = useBoardActions();
 
   let inputRef: HTMLInputElement | undefined;
   let plusRef: HTMLButtonElement | undefined;
@@ -268,12 +298,12 @@ export function AddColumn(props: { board: BoardId; onAdd: () => void }) {
         <form
           onSubmit={(e) => (
             e.preventDefault(),
-            addColumn(
+            emitCreateColumn([
               crypto.randomUUID() as ColumnId,
               props.board,
               inputRef?.value ?? "Column",
-              new Date().getTime()
-            ),
+              new Date().getTime(),
+            ]),
             inputRef && (inputRef.value = ""),
             props.onAdd()
           )}

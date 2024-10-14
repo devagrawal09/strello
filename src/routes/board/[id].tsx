@@ -8,6 +8,7 @@ import {
   useSubmission,
 } from "@solidjs/router";
 import { Show } from "solid-js";
+import { BoardActionsProvider } from "~/components/actions";
 import { Board } from "~/components/Board";
 import EditableText from "~/components/EditableText";
 import { fetchBoard } from "~/lib";
@@ -56,7 +57,9 @@ export default function Page(props: RouteSectionProps) {
           </h1>
 
           <div>
-            <Board board={board()} />
+            <BoardActionsProvider board={board()}>
+              <Board board={board()} />
+            </BoardActionsProvider>
           </div>
         </main>
       )}

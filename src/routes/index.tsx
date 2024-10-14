@@ -4,8 +4,8 @@ import {
   cache,
   createAsync,
   redirect,
+  useAction,
   useSubmission,
-  useSubmissions,
   type RouteDefinition,
 } from "@solidjs/router";
 import { BsTrash } from "solid-icons/bs";
@@ -13,6 +13,7 @@ import { For, Show, onMount } from "solid-js";
 import { getUser } from "~/lib";
 import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
+import { createEvent, createAsyncSubject } from "solid-events";
 
 const addBoard = action(async (formData: FormData) => {
   "use server";
@@ -66,25 +67,17 @@ export const route = {
 
 export default function Home() {
   const user = createAsync(() => getUser());
-  const serverBoards = createAsync(() => getBoards());
   const addBoardSubmission = useSubmission(addBoard);
-  const deleteBoardSubmissions = useSubmissions(deleteBoard);
 
-  const boards = () => {
-    if (deleteBoardSubmissions.pending) {
-      const deletedBoards: number[] = [];
+  const [onDeleteBoard, emitDeleteBoard] = createEvent<number>();
+  onDeleteBoard(useAction(deleteBoard));
 
-      for (const sub of deleteBoardSubmissions) {
-        deletedBoards.push(sub.input[0]);
-      }
-
-      return serverBoards()?.filter(
-        (board) => !deletedBoards.includes(board.id)
-      );
-    }
-
-    return serverBoards();
-  };
+  const boards = createAsyncSubject(
+    () => getBoards(),
+    onDeleteBoard(
+      (boardId) => (boards) => boards.filter((board) => board.id !== boardId)
+    )
+  );
 
   let inputRef: HTMLInputElement | undefined;
 
@@ -162,7 +155,7 @@ export default function Home() {
 
                       <form
                         class="absolute top-2.5 right-2.5"
-                        action={deleteBoard.with(board.id)}
+                        onSubmit={() => emitDeleteBoard(board.id)}
                         method="post"
                       >
                         <button
