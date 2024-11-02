@@ -1,35 +1,3 @@
-import { Observable } from "rxjs";
-import {
-  type Accessor,
-  createRoot,
-  createEffect,
-  getOwner,
-  onCleanup,
-  createSignal,
-} from "solid-js/dist/solid";
-
-export function observable<T>(input: Accessor<T>) {
-  return new Observable<T>((observer) => {
-    const dispose = createRoot((disposer) => {
-      createEffect(() => observer.next(input()));
-      return disposer;
-    });
-
-    if (getOwner()) onCleanup(dispose);
-
-    return () => dispose();
-  });
-}
-
-export function from<T>(producer: {
-  subscribe: (fn: (v: T) => void) => { unsubscribe: () => void };
-}): Accessor<T | undefined> {
-  const [s, set] = createSignal<T | undefined>(undefined);
-  const sub = producer.subscribe(set);
-  onCleanup(() => sub.unsubscribe());
-  return s;
-}
-
 export type WsMessage<T> = T & { id: string };
 
 export type WsMessageUp<I = any> =
@@ -40,8 +8,7 @@ export type WsMessageUp<I = any> =
     }
   | {
       type: "subscribe";
-      ref: SerializedRef;
-      input?: I;
+      ref: SerializedMemo;
     }
   | {
       type: "dispose";
@@ -50,11 +17,21 @@ export type WsMessageUp<I = any> =
       type: "invoke";
       ref: SerializedRef;
       input?: I;
+    }
+  | {
+      type: "value";
+      value: I;
     };
 
-export type WsMessageDown<T> = {
-  value: T;
-};
+export type WsMessageDown<T> =
+  | {
+      type: "value";
+      value: T;
+    }
+  | {
+      type: "subscribe";
+      ref: SerializedMemo;
+    };
 
 export type SerializedRef<I = any, O = any> = {
   __type: "ref";
@@ -62,9 +39,30 @@ export type SerializedRef<I = any, O = any> = {
   scope: string;
 };
 
+export type SerializedMemo<O = any> = {
+  __type: "memo";
+  name: string;
+  scope: string;
+  initial: O;
+};
+
+export type SerializedThing = SerializedRef | SerializedMemo;
+
 export type SerializedStream<O = any> = {
   __type: "stream";
   name: string;
   scope: string;
   value: O;
 };
+
+export function createSeriazliedMemo(
+  opts: Omit<SerializedMemo, "__type">
+): SerializedMemo {
+  return { ...opts, __type: "memo" };
+}
+
+export function createSocketMemo<T>(source: () => T): () => T | undefined {
+  // @ts-expect-error
+  source.type = "memo";
+  return source;
+}

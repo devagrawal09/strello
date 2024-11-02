@@ -1,6 +1,24 @@
-import { from as rxFrom, mergeMap, Observable } from "rxjs";
-import { SerializedRef, WsMessage, WsMessageDown, WsMessageUp } from "./shared";
-import { getListener, onCleanup } from "solid-js";
+import { from as rxFrom, mergeMap, Observable, tap } from "rxjs";
+import {
+  createSeriazliedMemo,
+  SerializedMemo,
+  SerializedRef,
+  SerializedThing,
+  WsMessage,
+  WsMessageDown,
+  WsMessageUp,
+} from "./shared";
+import {
+  createEffect,
+  createMemo,
+  from,
+  getOwner,
+  onCleanup,
+  runWithOwner,
+  untrack,
+} from "solid-js";
+import { createAsync } from "@solidjs/router";
+import { createLazyMemo } from "@solid-primitives/memo";
 
 const globalWsPromise = new Promise<SimpleWs>((resolve) => {
   const ws = new WebSocket("ws://localhost:3000/_ws");
@@ -29,7 +47,7 @@ function wsRpc<T>(message: WsMessageUp, wsPromise: Promise<SimpleWs>) {
     function handler(event: { data: string }) {
       // console.log(`handler ${id}`, message, { data: event.data });
       const data = JSON.parse(event.data) as WsMessage<WsMessageDown<T>>;
-      if (data.id === id) {
+      if (data.id === id && data.type === "value") {
         res({ value: data.value, dispose });
         ws.removeEventListener("message", handler);
       }
@@ -48,9 +66,11 @@ function wsSub<T>(message: WsMessageUp, wsPromise: Promise<SimpleWs>) {
   return rxFrom(Promise.resolve(wsPromise)).pipe(
     mergeMap((ws) => {
       return new Observable<T>((obs) => {
+        // console.log(`attaching sub handler`);
         function handler(event: { data: string }) {
           const data = JSON.parse(event.data) as WsMessage<WsMessageDown<T>>;
-          if (data.id === id) obs.next(data.value);
+          // console.log(`data`, data, id);
+          if (data.id === id && data.type === "value") obs.next(data.value);
         }
 
         ws.addEventListener("message", handler);
@@ -58,80 +78,151 @@ function wsSub<T>(message: WsMessageUp, wsPromise: Promise<SimpleWs>) {
           JSON.stringify({ ...message, id } satisfies WsMessage<WsMessageUp>)
         );
 
-        return () => ws.removeEventListener("message", handler);
+        return () => {
+          // console.log(`detaching sub handler`);
+          ws.removeEventListener("message", handler);
+        };
       });
     })
   );
 }
 
-export type SocketRef<I = any, O = any> = (
-  input?: I
-) => Observable<O> | Promise<O>;
-
 export function createRef<I, O>(
-  refPromise: Promise<SerializedRef>,
+  ref: SerializedRef,
   wsPromise: Promise<SimpleWs>
 ) {
-  return (input: I) => {
-    if (getListener()) {
-      return rxFrom(refPromise).pipe(
-        mergeMap((ref) => {
-          // console.log(`exposeRef 2`, refPromise);
-          return wsSub<O>(
-            {
-              type: "subscribe",
-              ref,
-              input,
-            },
-            wsPromise
-          );
-        })
-      );
-    } else {
-      return refPromise.then((ref) => {
-        return wsRpc<O>(
+  return (input: I) =>
+    wsRpc<O>(
+      {
+        type: "invoke",
+        ref,
+        input,
+      },
+      wsPromise
+    ).then(({ value }) => value);
+}
+
+export function createSocketMemoConsumer<O>(
+  ref: SerializedMemo,
+  wsPromise: Promise<SimpleWs>
+) {
+  // console.log({ ref });
+  const memo = createLazyMemo(
+    () =>
+      from(
+        wsSub<O>(
           {
-            type: "invoke",
+            type: "subscribe",
             ref,
-            input,
           },
           wsPromise
-        ).then(({ value }) => value);
-      });
-    }
+        )
+      ),
+    () => ref.initial
+  );
+
+  return () => {
+    const memoValue = memo()();
+    // console.log({ memoValue });
+    return memoValue;
   };
 }
-function assertRef(ref: any): SerializedRef {
-  if (ref.__type === "ref") return ref;
-  throw new Error(`not a ref`);
-}
 
-export function createEndpoint(name: string, wsPromise = globalWsPromise) {
-  const scopePromise = wsRpc<SerializedRef | Record<string, SerializedRef>>(
-    { type: "create", name },
+type SerializedValue = SerializedThing | Record<string, SerializedThing>;
+
+const deserializeValue = (value: SerializedValue) => {
+  if (value.__type === "ref") {
+    return createRef(value, globalWsPromise);
+  } else if (value.__type === "memo") {
+    return createSocketMemoConsumer(value, globalWsPromise);
+  } else {
+    return Object.entries(value).reduce((res, [name, value]) => {
+      return {
+        ...res,
+        [name]:
+          value.__type === "ref"
+            ? createRef(value, globalWsPromise)
+            : value.__type === "memo"
+            ? createSocketMemoConsumer(value, globalWsPromise)
+            : value,
+      };
+    }, {} as any);
+  }
+};
+
+export function createEndpoint(
+  name: string,
+  input?: any,
+  wsPromise = globalWsPromise
+) {
+  const inputScope = crypto.randomUUID();
+  const serializedInput =
+    input?.type === "memo"
+      ? createSeriazliedMemo({
+          name: `input`,
+          scope: inputScope,
+          initial: untrack(input),
+        })
+      : input;
+  // console.log({ serializedInput });
+
+  const scopePromise = wsRpc<SerializedValue>(
+    { type: "create", name, input: serializedInput },
     wsPromise
   );
-  const scopeValue = scopePromise.then(({ value }) => value);
+
+  const o = getOwner();
+  if (input?.type === "memo") {
+    // console.log(`listening for subscriptions on input memo`);
+    wsPromise.then((ws) => {
+      runWithOwner(o, () => {
+        // console.log(`listening for subscriptions on input memo`);
+
+        function handler(event: { data: string }) {
+          const data = JSON.parse(event.data) as WsMessage<WsMessageDown<any>>;
+
+          if (data.type === "subscribe" && data.ref.scope === inputScope) {
+            runWithOwner(o, () => {
+              // console.log(`server subscribed to input`);
+
+              createEffect(() => {
+                const value = input();
+                // console.log(`sending input update to server`, value);
+                ws.send(
+                  JSON.stringify({
+                    type: "value",
+                    id: data.id,
+                    value,
+                  } satisfies WsMessage<WsMessageUp>)
+                );
+              });
+            });
+          }
+        }
+        ws.addEventListener("message", handler);
+        onCleanup(() => ws.removeEventListener("message", handler));
+      });
+    });
+  }
 
   onCleanup(() => {
+    // console.log(`cleanup endpoint`);
     scopePromise.then(({ dispose }) => dispose());
   });
 
-  scopeValue.then((sv) => console.log({ sv }));
+  const scope = createAsync(() => scopePromise);
+  const deserializedScope = createMemo(
+    () => scope() && deserializeValue(scope()!.value)
+  );
 
-  return new Proxy<SocketRef | Record<string, SocketRef>>((() => {}) as any, {
-    apply(_, __, [input]) {
-      const refPromise = scopeValue.then(assertRef);
-      const invokeRef = createRef(refPromise, wsPromise);
-      return invokeRef(input);
-    },
+  return new Proxy((() => {}) as any, {
     get(_, path) {
-      const refPromise = scopeValue.then((callables) =>
-        // @ts-expect-error
-        assertRef(callables[path])
-      );
-      const invokeRef = createRef(refPromise, wsPromise);
-      return invokeRef;
+      const res = deserializedScope()?.[path];
+      return res || (() => {});
+    },
+    apply(_, __, args) {
+      const res = deserializedScope()?.(...args);
+      return res;
     },
   });
 }

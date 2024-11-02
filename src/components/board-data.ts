@@ -1,6 +1,6 @@
 "use socket";
 
-import { createEffect, createSignal } from "solid-js/dist/solid";
+import { createEffect, createSignal } from "solid-js";
 
 export const createBoard = () => {
   const [boardState, setBoard] = createSignal();
