@@ -19,9 +19,14 @@
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.8.1",
+    "@kobalte/core": "^0.13.7",
     "@libsql/client": "^0.6.1",
     "@prisma/adapter-libsql": "^5.14.0",
     "@prisma/client": "^5.7.0",
+    "@solid-primitives/memo": "^1.3.10",
+    "@solid-primitives/mouse": "^2.0.20",
+    "@solid-primitives/rootless": "^1.4.5",
+    "@solid-primitives/scheduled": "^1.4.4",
     "@solidjs/meta": "^0.29.3",
     "@solidjs/router": "^0.13.3",
     "@solidjs/start": "^1.0.1",
@@ -36,6 +41,7 @@
     "solid-icons": "^1.1.0",
     "solid-js": "^1.8.17",
     "unimport": "^3.7.1",
+    "unique-names-generator": "^4.7.1",
     "unocss-preset-theme": "^0.12.0",
     "vinxi": "^0.3.14"
   },

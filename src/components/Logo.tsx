@@ -88,7 +88,7 @@ export function Logo(props: { class?: string }) {
         />
       </svg>
       <span class="text-2xl leading-none font-normal inactive md:block">
-        Strello
+        MultiStrello
       </span>
     </div>
   );

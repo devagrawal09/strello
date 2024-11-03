@@ -12,13 +12,11 @@ import {
   createMemo,
   createRoot,
   createSignal,
-  from,
   observable,
   onCleanup,
   untrack,
 } from "solid-js";
 import { getManifest } from "vinxi/manifest";
-import { Observable } from "rxjs";
 
 export type Callable<T> = (arg: unknown) => T | Promise<T>;
 
@@ -67,6 +65,7 @@ export class LiveSolidServer {
 
   async create(id: string, name: string, input?: SerializedThing) {
     const [filepath, functionName] = name.split("#");
+    // @ts-expect-error
     const module = await getManifest(import.meta.env.ROUTER_NAME).chunks[
       filepath
     ].import();
@@ -123,16 +122,16 @@ export class LiveSolidServer {
     }
   }
 
-  invoke<I, O>(id: string, ref: SerializedRef<I, O>, input: I) {
+  async invoke<I, O>(id: string, ref: SerializedRef<I, O>, input: any[]) {
     const closure = this.closures.get(ref.scope);
     if (!closure) throw new Error(`Callable ${ref.scope} not found`);
     const { payload } = closure;
 
     if (typeof payload === "function") {
-      const response = payload(input);
+      const response = await payload(...input);
       this.send({ id, value: response, type: "value" });
     } else {
-      const response = payload[ref.name](input);
+      const response = await payload[ref.name](...input);
       this.send({ id, value: response, type: "value" });
     }
   }

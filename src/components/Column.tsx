@@ -1,4 +1,3 @@
-import { action, useAction } from "@solidjs/router";
 import { BsPlus, BsTrash } from "solid-icons/bs";
 import { RiEditorDraggable } from "solid-icons/ri";
 import {
@@ -9,74 +8,9 @@ import {
   createSignal,
   onMount,
 } from "solid-js";
-import { type Board, type BoardId, DragTypes } from "./Board";
 import { getIndexBetween } from "~/lib/utils";
-import { AddNote, Note, NoteId, moveNote } from "./Note";
-import { getAuthUser } from "~/lib/auth";
-import { db } from "~/lib/db";
-
-export const renameColumn = action(
-  async (id: ColumnId, name: string, timestamp: number) => {
-    "use server";
-    const accountId = await getAuthUser();
-
-    await db.column.update({
-      where: { id, Board: { accountId } },
-      data: { name },
-    });
-
-    return true;
-  }
-);
-
-export const createColumn = action(
-  async (id: ColumnId, board: BoardId, name: string, timestamp: number) => {
-    "use server";
-
-    const accountId = await getAuthUser();
-
-    let columnCount = await db.column.count({
-      where: { boardId: +board, Board: { accountId } },
-    });
-    await db.column.create({
-      data: {
-        id,
-        boardId: +board,
-        name,
-        order: columnCount + 1,
-      },
-    });
-
-    return true;
-  },
-  "create-column"
-);
-
-export const moveColumn = action(
-  async (id: ColumnId, order: number, timestamp: number) => {
-    "use server";
-    const accountId = await getAuthUser();
-
-    await db.column.update({
-      where: { id, Board: { accountId } },
-      data: { order },
-    });
-
-    return;
-  },
-  "create-column"
-);
-
-export const deleteColumn = action(async (id: ColumnId, timestamp: number) => {
-  "use server";
-  const accountId = await getAuthUser();
-
-  await db.column.delete({
-    where: { id, Board: { accountId } },
-  });
-
-  return true;
-}, "create-column");
+import { type BoardId, DragTypes } from "./Board";
+import { AddNote, Note, NoteId } from "./Note";
 
 export type ColumnId = string & { __brand?: "ColumnId" };
 
@@ -87,12 +21,23 @@ export type Column = {
   order: number;
 };
 
-export function Column(props: { column: Column; board: Board; notes: Note[] }) {
+export function Column(props: {
+  boardId: string;
+  column: Column;
+  notes: Note[];
+  renameColumn: (columnId: ColumnId, name: string) => void;
+  deleteColumn: (columnId: ColumnId) => void;
+  moveNote: (noteId: NoteId, column: ColumnId, order: number) => void;
+  createNote: (
+    noteId: NoteId,
+    column: ColumnId,
+    body: string,
+    order: number
+  ) => void;
+  editNote: (noteId: NoteId, body: string) => void;
+  deleteNote: (noteId: NoteId) => void;
+}) {
   let parent: HTMLDivElement | undefined;
-
-  const renameAction = useAction(renameColumn);
-  const deleteAction = useAction(deleteColumn);
-  const moveNoteAction = useAction(moveNote);
 
   const [acceptDrop, setAcceptDrop] = createSignal<boolean>(false);
 
@@ -130,14 +75,13 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
             | NoteId
             | undefined;
           if (noteId && !filteredNotes().find((n) => n.id === noteId)) {
-            moveNoteAction(
+            props.moveNote(
               noteId,
               props.column.id,
               getIndexBetween(
                 filteredNotes()[filteredNotes().length - 1]?.order,
                 undefined
-              ),
-              new Date().getTime()
+              )
             );
           }
         }
@@ -154,11 +98,7 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
           required
           onBlur={(e) => {
             if (e.target.reportValidity()) {
-              renameAction(
-                props.column.id,
-                e.target.value,
-                new Date().getTime()
-              );
+              props.renameColumn(props.column.id, e.target.value);
             }
           }}
           onKeyDown={(e) => {
@@ -170,7 +110,7 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
         />
         <button
           class="btn btn-ghost btn-sm btn-circle"
-          onClick={() => deleteAction(props.column.id, new Date().getTime())}
+          onClick={() => props.deleteColumn(props.column.id)}
         >
           <BsTrash />
         </button>
@@ -185,14 +125,18 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
               note={n}
               previous={filteredNotes()[i() - 1]}
               next={filteredNotes()[i() + 1]}
+              moveNote={props.moveNote}
+              editNote={props.editNote}
+              deleteNote={props.deleteNote}
             />
           )}
         </For>
       </div>
       <AddNote
         column={props.column.id}
-        board={props.board.id}
+        board={props.boardId}
         length={props.notes.length}
+        createNote={props.createNote}
         onAdd={() => {
           parent && (parent.scrollTop = parent.scrollHeight);
         }}
@@ -201,9 +145,13 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
   );
 }
 
-export function ColumnGap(props: { left?: Column; right?: Column }) {
+export function ColumnGap(props: {
+  left?: Column;
+  right?: Column;
+  moveColumn: (columnId: ColumnId, order: number) => void;
+}) {
   const [active, setActive] = createSignal(false);
-  const moveColumnAction = useAction(moveColumn);
+
   return (
     <div
       class="h-full rounded-lg transition min-w-5 w-10"
@@ -241,7 +189,7 @@ export function ColumnGap(props: { left?: Column; right?: Column }) {
               props.left?.order,
               props.right?.order
             );
-            moveColumnAction(columnId, newOrder, new Date().getTime());
+            props.moveColumn(columnId, newOrder);
           }
         }
       }}
@@ -249,10 +197,11 @@ export function ColumnGap(props: { left?: Column; right?: Column }) {
   );
 }
 
-export function AddColumn(props: { board: BoardId; onAdd: () => void }) {
+export function AddColumn(props: {
+  board: BoardId;
+  createColumn: (columnId: ColumnId, title: string) => void;
+}) {
   const [active, setActive] = createSignal(false);
-
-  const addColumn = useAction(createColumn);
 
   let inputRef: HTMLInputElement | undefined;
   let plusRef: HTMLButtonElement | undefined;
@@ -267,14 +216,11 @@ export function AddColumn(props: { board: BoardId; onAdd: () => void }) {
         <form
           onSubmit={(e) => (
             e.preventDefault(),
-            addColumn(
+            props.createColumn(
               crypto.randomUUID() as ColumnId,
-              props.board,
-              inputRef?.value ?? "Column",
-              new Date().getTime()
+              inputRef?.value ?? "Column"
             ),
-            inputRef && (inputRef.value = ""),
-            props.onAdd()
+            inputRef && (inputRef.value = "")
           )}
           class="flex flex-col space-y-2 card bg-slate-100 p-2 w-full max-w-[300px]"
           onFocusOut={(e) => {

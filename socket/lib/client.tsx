@@ -9,8 +9,10 @@ import {
   WsMessageUp,
 } from "./shared";
 import {
+  createComputed,
   createEffect,
   createMemo,
+  createSignal,
   from,
   getOwner,
   onCleanup,
@@ -19,6 +21,7 @@ import {
 } from "solid-js";
 import { createAsync } from "@solidjs/router";
 import { createLazyMemo } from "@solid-primitives/memo";
+import { createCallback } from "@solid-primitives/rootless";
 
 const globalWsPromise = new Promise<SimpleWs>((resolve) => {
   const ws = new WebSocket("ws://localhost:3000/_ws");
@@ -91,7 +94,7 @@ export function createRef<I, O>(
   ref: SerializedRef,
   wsPromise: Promise<SimpleWs>
 ) {
-  return (input: I) =>
+  return (...input: any[]) =>
     wsRpc<O>(
       {
         type: "invoke",
@@ -171,38 +174,39 @@ export function createEndpoint(
     wsPromise
   );
 
-  const o = getOwner();
   if (input?.type === "memo") {
-    // console.log(`listening for subscriptions on input memo`);
-    wsPromise.then((ws) => {
-      runWithOwner(o, () => {
-        // console.log(`listening for subscriptions on input memo`);
+    const [inputSignal, setInput] = createSignal(input());
+    createComputed(() => setInput(input()));
 
-        function handler(event: { data: string }) {
-          const data = JSON.parse(event.data) as WsMessage<WsMessageDown<any>>;
+    const onSubscribe = createCallback(
+      (ws: SimpleWs, data: WsMessage<WsMessageDown<any>>) => {
+        createEffect(() => {
+          const value = inputSignal();
+          // console.log(`sending input update to server`, value, input);
+          ws.send(
+            JSON.stringify({
+              type: "value",
+              id: data.id,
+              value,
+            } satisfies WsMessage<WsMessageUp>)
+          );
+        });
+      }
+    );
 
-          if (data.type === "subscribe" && data.ref.scope === inputScope) {
-            runWithOwner(o, () => {
-              // console.log(`server subscribed to input`);
+    const onWs = createCallback((ws: SimpleWs) => {
+      function handler(event: { data: string }) {
+        const data = JSON.parse(event.data) as WsMessage<WsMessageDown<any>>;
 
-              createEffect(() => {
-                const value = input();
-                // console.log(`sending input update to server`, value);
-                ws.send(
-                  JSON.stringify({
-                    type: "value",
-                    id: data.id,
-                    value,
-                  } satisfies WsMessage<WsMessageUp>)
-                );
-              });
-            });
-          }
+        if (data.type === "subscribe" && data.ref.scope === inputScope) {
+          onSubscribe(ws, data);
         }
-        ws.addEventListener("message", handler);
-        onCleanup(() => ws.removeEventListener("message", handler));
-      });
+      }
+      ws.addEventListener("message", handler);
+      onCleanup(() => ws.removeEventListener("message", handler));
     });
+
+    wsPromise.then(onWs);
   }
 
   onCleanup(() => {
