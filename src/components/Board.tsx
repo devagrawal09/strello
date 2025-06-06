@@ -236,11 +236,7 @@ export function Board(props: { board: BoardData }) {
     );
   });
 
-  // const sortedColumns = createMemo(() =>
-  //   boardStore.columns.slice().sort((a, b) => a.order - b.order)
-  // );
-  const [_sortedColumns, setSortedColumns] = createStore<Column[]>([]);
-  const sortedColumns = () => _sortedColumns;
+  const [sortedColumns, setSortedColumns] = createStore<Column[]>([]);
   const mapped = mapArray(
     () => boardStore.columns,
     (column) => {
@@ -261,8 +257,8 @@ export function Board(props: { board: BoardData }) {
       }}
       class="pb-8 h-[calc(100vh-160px)] min-w-full overflow-x-auto overflow-y-hidden flex flex-start items-start flex-nowrap"
     >
-      <ColumnGap right={sortedColumns()[0]} />
-      <For each={sortedColumns()}>
+      <ColumnGap right={sortedColumns[0]} />
+      <For each={sortedColumns}>
         {(column, i) => (
           <>
             <Column
@@ -271,8 +267,8 @@ export function Board(props: { board: BoardData }) {
               notes={boardStore.notes}
             />
             <ColumnGap
-              left={sortedColumns()[i()]}
-              right={sortedColumns()[i() + 1]}
+              left={sortedColumns[i()]}
+              right={sortedColumns[i() + 1]}
             />
           </>
         )}

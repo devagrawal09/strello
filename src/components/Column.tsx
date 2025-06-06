@@ -99,8 +99,7 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
 
   const [acceptDrop, setAcceptDrop] = createSignal<boolean>(false);
 
-  const [_filteredNotes, setFilteredNotes] = createStore<Note[]>([]);
-  const filteredNotes = () => _filteredNotes;
+  const [filteredNotes, setFilteredNotes] = createStore<Note[]>([]);
 
   const mapped = mapArray(
     () => props.notes,
@@ -151,12 +150,12 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
           const noteId = e.dataTransfer?.getData(DragTypes.Note) as
             | NoteId
             | undefined;
-          if (noteId && !filteredNotes().find((n) => n.id === noteId)) {
+          if (noteId && !filteredNotes.find((n) => n.id === noteId)) {
             moveNoteAction(
               noteId,
               props.column.id,
               getIndexBetween(
-                filteredNotes()[filteredNotes().length - 1]?.order,
+                filteredNotes[filteredNotes.length - 1]?.order,
                 undefined
               ),
               new Date().getTime()
@@ -201,12 +200,12 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
         class="flex h-full flex-col space-y-2 overflow-y-auto px-1"
         ref={parent}
       >
-        <For each={filteredNotes()}>
+        <For each={filteredNotes}>
           {(n, i) => (
             <Note
               note={n}
-              previous={filteredNotes()[i() - 1]}
-              next={filteredNotes()[i() + 1]}
+              previous={filteredNotes[i() - 1]}
+              next={filteredNotes[i() + 1]}
             />
           )}
         </For>
