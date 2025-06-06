@@ -5,16 +5,18 @@ import {
   For,
   Match,
   Switch,
-  createMemo,
+  createEffect,
   createSignal,
+  mapArray,
   onMount,
 } from "solid-js";
 import { type Board, type BoardId, DragTypes } from "./Board";
-import { getIndexBetween } from "~/lib/utils";
+import { getIndexBetween, sortIntoArray } from "~/lib/utils";
 import { AddNote, Note, NoteId, moveNote } from "./Note";
 import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
 import { fetchBoard } from "~/lib";
+import { createStore, produce } from "solid-js/store";
 
 export const renameColumn = action(
   async (id: ColumnId, name: string, timestamp: number) => {
@@ -97,11 +99,30 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
 
   const [acceptDrop, setAcceptDrop] = createSignal<boolean>(false);
 
-  const filteredNotes = createMemo(() =>
-    props.notes
-      .filter((n) => n.column === props.column.id)
-      .sort((a, b) => a.order - b.order)
+  const [_filteredNotes, setFilteredNotes] = createStore<Note[]>([]);
+  const filteredNotes = () => _filteredNotes;
+
+  const mapped = mapArray(
+    () => props.notes,
+    (note) => {
+      createEffect(() => {
+        setFilteredNotes(
+          produce((f) => {
+            if (note.column === props.column.id) {
+              sortIntoArray(f, note);
+            } else {
+              const index = f.findIndex((n) => n.id === note.id);
+              if (index !== -1) {
+                f.splice(index, 1);
+              }
+            }
+          })
+        );
+      });
+    }
   );
+
+  createEffect(() => mapped());
 
   return (
     <div
