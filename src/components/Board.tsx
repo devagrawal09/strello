@@ -1,5 +1,5 @@
-import { Action, useSubmissions } from "@solidjs/router";
-import { For, batch, createEffect, createMemo, untrack } from "solid-js";
+import { useSubmissions } from "@solidjs/router";
+import { For, batch, createEffect, mapArray, untrack } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import {
   AddColumn,
@@ -19,6 +19,7 @@ import {
   editNote,
   moveNote,
 } from "./Note";
+import { sortIntoArray } from "~/lib/utils";
 
 export enum DragTypes {
   Note = "application/note",
@@ -211,11 +212,6 @@ export function Board(props: { board: BoardData }) {
     const { notes, columns } = props.board;
     applyMutations(mutations, notes, columns);
 
-    console.log(
-      `got server data, reset the board with mutations`,
-      ...mutations
-    );
-
     batch(() => {
       setBoardStore("notes", reconcile(notes));
       setBoardStore("columns", reconcile(columns));
@@ -230,12 +226,7 @@ export function Board(props: { board: BoardData }) {
       (m) => m.timestamp > prevTimestamp
     );
 
-    console.log(
-      `found submission, apply optimistic update with mutations`,
-      ...latestMutations
-    );
-
-    if (!optimisticUpdates) return console.log(`Skipping optimistic update`);
+    if (!optimisticUpdates) return;
 
     setBoardStore(
       produce((b) => {
@@ -245,9 +236,17 @@ export function Board(props: { board: BoardData }) {
     );
   });
 
-  const sortedColumns = createMemo(() =>
-    boardStore.columns.slice().sort((a, b) => a.order - b.order)
+  const [sortedColumns, setSortedColumns] = createStore<Column[]>([]);
+  const mapped = mapArray(
+    () => boardStore.columns,
+    (column) => {
+      createEffect(() => {
+        setSortedColumns(produce((f) => sortIntoArray(f, column)));
+      });
+    }
   );
+
+  createEffect(() => mapped());
 
   let scrollContainerRef: HTMLDivElement | undefined;
 
@@ -258,8 +257,8 @@ export function Board(props: { board: BoardData }) {
       }}
       class="pb-8 h-[calc(100vh-160px)] min-w-full overflow-x-auto overflow-y-hidden flex flex-start items-start flex-nowrap"
     >
-      <ColumnGap right={sortedColumns()[0]} />
-      <For each={sortedColumns()}>
+      <ColumnGap right={sortedColumns[0]} />
+      <For each={sortedColumns}>
         {(column, i) => (
           <>
             <Column
@@ -268,8 +267,8 @@ export function Board(props: { board: BoardData }) {
               notes={boardStore.notes}
             />
             <ColumnGap
-              left={sortedColumns()[i()]}
-              right={sortedColumns()[i() + 1]}
+              left={sortedColumns[i()]}
+              right={sortedColumns[i() + 1]}
             />
           </>
         )}

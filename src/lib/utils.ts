@@ -29,3 +29,31 @@ export const getIndexBetween = (
   below: number | undefined,
   above: number | undefined
 ) => getIndicesBetween(below, above, 1)[0];
+
+export function sortIntoArray<T extends { id: string; order: number }>(
+  array: T[],
+  item: T
+) {
+  if (array.length === 0) {
+    array.push(item);
+  } else {
+    const index = array.findIndex((n) => n.id === item.id);
+
+    if (index !== -1) {
+      array.splice(index, 1);
+    }
+
+    let inserted = false;
+    for (let i = 0; i < array.length; i++) {
+      if (array[i].order > item.order) {
+        array.splice(i, 0, item);
+        inserted = true;
+        break;
+      }
+    }
+
+    if (!inserted) {
+      array.push(item);
+    }
+  }
+}

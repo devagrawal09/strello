@@ -5,16 +5,18 @@ import {
   For,
   Match,
   Switch,
-  createMemo,
+  createEffect,
   createSignal,
+  mapArray,
   onMount,
 } from "solid-js";
 import { type Board, type BoardId, DragTypes } from "./Board";
-import { getIndexBetween } from "~/lib/utils";
+import { getIndexBetween, sortIntoArray } from "~/lib/utils";
 import { AddNote, Note, NoteId, moveNote } from "./Note";
 import { getAuthUser } from "~/lib/auth";
 import { db } from "~/lib/db";
 import { fetchBoard } from "~/lib";
+import { createStore, produce } from "solid-js/store";
 
 export const renameColumn = action(
   async (id: ColumnId, name: string, timestamp: number) => {
@@ -97,11 +99,29 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
 
   const [acceptDrop, setAcceptDrop] = createSignal<boolean>(false);
 
-  const filteredNotes = createMemo(() =>
-    props.notes
-      .filter((n) => n.column === props.column.id)
-      .sort((a, b) => a.order - b.order)
+  const [filteredNotes, setFilteredNotes] = createStore<Note[]>([]);
+
+  const mapped = mapArray(
+    () => props.notes,
+    (note) => {
+      createEffect(() => {
+        setFilteredNotes(
+          produce((f) => {
+            if (note.column === props.column.id) {
+              sortIntoArray(f, note);
+            } else {
+              const index = f.findIndex((n) => n.id === note.id);
+              if (index !== -1) {
+                f.splice(index, 1);
+              }
+            }
+          })
+        );
+      });
+    }
   );
+
+  createEffect(() => mapped());
 
   return (
     <div
@@ -130,12 +150,12 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
           const noteId = e.dataTransfer?.getData(DragTypes.Note) as
             | NoteId
             | undefined;
-          if (noteId && !filteredNotes().find((n) => n.id === noteId)) {
+          if (noteId && !filteredNotes.find((n) => n.id === noteId)) {
             moveNoteAction(
               noteId,
               props.column.id,
               getIndexBetween(
-                filteredNotes()[filteredNotes().length - 1]?.order,
+                filteredNotes[filteredNotes.length - 1]?.order,
                 undefined
               ),
               new Date().getTime()
@@ -180,12 +200,12 @@ export function Column(props: { column: Column; board: Board; notes: Note[] }) {
         class="flex h-full flex-col space-y-2 overflow-y-auto px-1"
         ref={parent}
       >
-        <For each={filteredNotes()}>
+        <For each={filteredNotes}>
           {(n, i) => (
             <Note
               note={n}
-              previous={filteredNotes()[i() - 1]}
-              next={filteredNotes()[i() + 1]}
+              previous={filteredNotes[i() - 1]}
+              next={filteredNotes[i() + 1]}
             />
           )}
         </For>
